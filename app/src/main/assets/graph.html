@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Knowledge Graph</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.23.0/cytoscape.min.js"></script>
+    <script>
+        // Add immediate alert to verify script execution
+        alert('Script starting to load');
+    </script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+        }
+        #cy {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            left: 0;
+            top: 0;
+            z-index: 1;
+        }
+        #addNodeBtn {
+            position: fixed;
+            right: 24px;
+            bottom: 80px;
+            z-index: 1000;
+            width: 48px;
+            height: 48px;
+            transition: filter 0.2s, transform 0.2s;
+            pointer-events: all;
+            border-radius: 50%;
+            background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        #addNodeBtn:hover {
+            filter: brightness(1.2);
+            transform: scale(1.1);
+        }
+        #uploadGraphBtn {
+            position: fixed;
+            right: 24px;
+            bottom: 140px;
+            z-index: 1000;
+            width: 48px;
+            height: 48px;
+            transition: filter 0.2s, transform 0.2s;
+            pointer-events: all;
+            border-radius: 50%;
+            background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            cursor: pointer;
+        }
+        #searchContainer {
+            position: absolute;
+            top: 26px;
+            left: 16px;
+            right: 16px;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            background: white;
+            border-radius: 8px;
+            padding: 8px 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        #searchInput {
+            flex: 1;
+            border: none;
+            outline: none;
+            font-size: 16px;
+            margin: 0 8px;
+            background: transparent;
+        }
+        #searchIcon {
+            width: 20px;
+            height: 20px;
+            opacity: 0.5;
+        }
+        #clearSearch {
+            width: 20px;
+            height: 20px;
+            opacity: 0.5;
+            cursor: pointer;
+            display: none;
+        }
+        #clearSearch:hover {
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <div id="cy"></div>
+    <div id="searchContainer">
+        <img id="searchIcon" src="icons/search.svg" alt="Search">
+        <input type="text" id="searchInput" placeholder="Search in knowledge graph...">
+        <img id="clearSearch" src="icons/clear.svg" alt="Clear">
+    </div>
+    <img id="addNodeBtn" src="icons/add_node.svg" alt="Add Node">
+    <img id="uploadGraphBtn" src="icons/upload_file.svg" alt="Upload Graph">
+    <div id="addNodeModal" style="display: none; position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); background-color: white; padding: 20px; border: 1px solid #ccc; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.25); z-index: 1001; width: 300px; font-family: 'Avenir', sans-serif;">
+        <h3 style="margin-top: 0; margin-bottom: 10px; text-align: center;">Add New Connected Entity</h3>
+        <label for="newNodeNameInput" style="display: block; margin-bottom: 5px; font-size: 14px;">New Entity Name:</label>
+        <input type="text" id="newNodeNameInput" style="width: calc(100% - 12px); margin-bottom: 12px; padding: 8px; border-radius: 4px; border: 1px solid #ddd; font-size: 14px;">
+
+        <label for="relationTypeInput" style="display: block; margin-bottom: 5px; font-size: 14px;">Relation Type (e.g., friend, works_at):</label>
+        <input type="text" id="relationTypeInput" style="width: calc(100% - 12px); margin-bottom: 20px; padding: 8px; border-radius: 4px; border: 1px solid #ddd; font-size: 14px;">
+
+        <div style="text-align: right;">
+            <button id="confirmAddNodeBtn" style="padding: 8px 15px; margin-right: 10px; background-color: #315AE3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">Add Entity</button>
+            <button id="cancelAddNodeBtn" style="padding: 8px 15px; background-color: #eee; color: #333; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">Cancel</button>
+        </div>
+    </div>
+    <script>
+        alert('graph.html loaded');
+        var cy = null;
+
+        // Initialize search functionality
+        function initSearch() {
+            alert('initSearch called');
+            const searchInput = document.getElementById('searchInput');
+            const clearSearch = document.getElementById('clearSearch');
+
+            searchInput.addEventListener('input', function(e) {
+                const query = e.target.value;
+                if (query) {
+                    clearSearch.style.display = 'block';
+                    searchInGraph(query);
+                } else {
+                    clearSearch.style.display = 'none';
+                    clearSearch();
+                }
+            });
+
+            clearSearch.addEventListener('click', function() {
+                searchInput.value = '';
+                clearSearch.style.display = 'none';
+                clearSearch();
+            });
+        }
+
+        // 初始化图谱的函数
+        function initGraph(graphData) {
+            alert('initGraph called with data: ' + JSON.stringify(graphData).substring(0, 100) + '...');
+            console.log('graphData:', graphData);
+            
+            if (!graphData || !graphData.nodes || !graphData.edges) {
+                alert('Invalid graph data format!');
+                return;
+            }
+
+            if (cy) {
+                cy.destroy();
+            }
+
+            try {
+                const nodes = graphData.nodes.map(n => ({
+                    data: {
+                        id: n.id,
+                        name: n.labels[0],
+                        size: 40
+                    },
+                    classes: n.id.startsWith('g1') ? 'enriched' : ''
+                }));
+                const edges = graphData.edges.map(e => ({
+                    data: {
+                        id: e.id,
+                        source: e.source,
+                        target: e.target,
+                        label: e.labels[0]
+                    }
+                }));
+
+                alert('Data converted successfully. Nodes: ' + nodes.length + ', Edges: ' + edges.length);
+
+                // 根据节点数量智能选择布局参数
+                const nodeCount = nodes.length;
+                let layoutConfig;
+                
+                if (nodeCount <= 10) {
+                    // 少量节点，使用紧凑布局
+                    layoutConfig = {
+                        name: 'cose-bilkent',
+                        idealEdgeLength: 120,
+                        nodeRepulsion: 4000,
+                        edgeElasticity: 0.5,
+                        nestingFactor: 0.15,
+                        gravity: 0.3,
+                        numIter: 2000,
+                        tile: false,
+                        animate: true,
+                        refresh: 20,
+                        fit: true,
+                        padding: 40,
+                        componentSpacing: 120
+                    };
+                } else if (nodeCount <= 30) {
+                    // 中等数量节点，使用平衡布局
+                    layoutConfig = {
+                        name: 'cose-bilkent',
+                        idealEdgeLength: 150,
+                        nodeRepulsion: 6000,
+                        edgeElasticity: 0.45,
+                        nestingFactor: 0.1,
+                        gravity: 0.25,
+                        numIter: 2500,
+                        tile: true,
+                        animate: true,
+                        refresh: 20,
+                        fit: true,
+                        padding: 50,
+                        componentSpacing: 150
+                    };
+                } else {
+                    // 大量节点，使用宽松布局
+                    layoutConfig = {
+                        name: 'cose-bilkent',
+                        idealEdgeLength: 200,
+                        nodeRepulsion: 8000,
+                        edgeElasticity: 0.3,
+                        nestingFactor: 0.05,
+                        gravity: 0.15,
+                        numIter: 3000,
+                        tile: true,
+                        animate: true,
+                        refresh: 30,
+                        fit: true,
+                        padding: 80,
+                        componentSpacing: 200
+                    };
+                }
+
+                cy = cytoscape({
+                    container: document.getElementById('cy'),
+                    style: [
+                        {
+                            selector: 'node',
+                            style: {
+                                'background-color': '#E3F2FD',
+                                'label': 'data(name)',
+                                'color': '#263238',
+                                'text-valign': 'center',
+                                'text-halign': 'center',
+                                'font-size': 16,
+                                'font-family': 'Avenir, Helvetica, Arial, sans-serif',
+                                'font-weight': 500,
+                                'text-outline-color': '#FAFAFA',
+                                'text-outline-width': 2,
+                                'width': 60,
+                                'height': 60,
+                                'border-width': 2,
+                                'border-color': '#B0BEC5',
+                                'border-opacity': 0.7,
+                                'shadow-blur': 18,
+                                'shadow-color': '#90CAF9',
+                                'shadow-opacity': 0.25,
+                                'shadow-offset-x': 0,
+                                'shadow-offset-y': 2,
+                                'shape': 'ellipse',
+                                'transition-property': 'background-color, border-color, width, height, font-size',
+                                'transition-duration': '0.3s'
+                            }
+                        },
+                        {
+                            selector: 'node.enriched',
+                            style: {
+                                'background-color': '#FFFDE7',
+                                'border-width': 3,
+                                'border-color': '#FFB300',
+                                'shadow-color': '#FFB300',
+                                'color': '#37474F',
+                                'font-size': 18
+                            }
+                        },
+                        {
+                            selector: 'node.highlighted, node:selected',
+                            style: {
+                                'background-color': '#FFA726',
+                                'border-color': '#FF7043',
+                                'border-width': 6,
+                                'shadow-color': '#FF7043',
+                                'color': '#263238',
+                                'font-size': 20,
+                                'font-weight': 700,
+                                'text-outline-color': '#FFFDE7',
+                                'text-outline-width': 5,
+                                'z-index': 9999,
+                                'width': 70,
+                                'height': 70,
+                                'shadow-blur': 30
+                            }
+                        },
+                        {
+                            selector: 'edge',
+                            style: {
+                                'width': 2.2,
+                                'line-color': '#CFD8DC',
+                                'target-arrow-color': '#B0BEC5',
+                                'target-arrow-shape': 'triangle-backcurve',
+                                'target-arrow-scale': 0.7,
+                                'curve-style': 'bezier',
+                                'label': 'data(label)',
+                                'font-size': 13,
+                                'font-family': 'Avenir, Helvetica, Arial, sans-serif',
+                                'color': '#37474F',
+                                'text-background-color': '#FAFAFA',
+                                'text-background-opacity': 0.7,
+                                'text-background-padding': 3,
+                                'text-border-color': '#B0BEC5',
+                                'text-border-width': 1,
+                                'text-border-opacity': 0.3,
+                                'text-rotation': 'autorotate',
+                                'text-margin-y': -8,
+                                'text-outline-color': '#FFFDE7',
+                                'text-outline-width': 2
+                            }
+                        },
+                        {
+                            selector: 'edge.highlighted',
+                            style: {
+                                'width': 3.5,
+                                'line-color': '#FFA726',
+                                'target-arrow-color': '#FFA726',
+                                'color': '#FF7043',
+                                'font-size': 15
+                            }
+                        }
+                    ],
+                    elements: {
+                        nodes: nodes,
+                        edges: edges
+                    },
+                    layout: layoutConfig
+                });
+
+                alert('Cytoscape initialized');
+
+                // control zoom
+                window.setZoomEnabled = function(enabled) {
+                    if (cy) {
+                        cy.userZoomingEnabled(enabled);
+                    }
+                }
+
+                // control node dragging
+                window.setNodeDraggingEnabled = function(enabled) {
+                    if (cy) {
+                        if (enabled) {
+                            cy.autoungrabify(false);
+                            cy.nodes().forEach(function(node) {
+                                node.grabbable(true);
+                            });
+                        } else {
+                            cy.autoungrabify(true);
+                            cy.nodes().forEach(function(node) {
+                                node.grabbable(false);
+                            });
+                        }
+                    }
+                }
+
+                // search functionality
+                window.searchInGraph = function(query) {
+                    if (!cy) return;
+                    const searchTerm = query.toLowerCase();
+                    cy.nodes().forEach(node => {
+                        const name = node.data('name').toLowerCase();
+                        if (name.includes(searchTerm)) {
+                            node.addClass('highlighted');
+                        } else {
+                            node.removeClass('highlighted');
+                        }
+                    });
+                }
+
+                // clear search
+                window.clearSearch = function() {
+                    if (!cy) return;
+                    cy.nodes().forEach(node => {
+                        node.removeClass('highlighted');
+                    });
+                }
+
+                // update security mode
+                window.updateSecurityMode = function(isSecure) {
+                    if (!cy) return;
+                    window.setNodeDraggingEnabled(!isSecure);
+                    window.setZoomEnabled(!isSecure);
+                }
+
+                cy.ready(function() {
+                    window.setNodeDraggingEnabled(true);
+                    initSearch();
+                    
+                    // automatically optimize layout, avoid node crowding
+                    setTimeout(function() {
+                        const nodeCount = cy.nodes().length;
+                        let optimizedLayout;
+                        
+                        if (nodeCount > 30) {
+                            // use more宽松的布局
+                            optimizedLayout = {
+                                name: 'cose-bilkent',
+                                idealEdgeLength: 250,
+                                nodeRepulsion: 10000,
+                                edgeElasticity: 0.25,
+                                nestingFactor: 0.03,
+                                gravity: 0.1,
+                                numIter: 3500,
+                                tile: true,
+                                animate: true,
+                                refresh: 40,
+                                fit: true,
+                                padding: 100,
+                                componentSpacing: 250
+                            };
+                        } else if (nodeCount > 20) {
+                            // use balanced layout
+                            optimizedLayout = {
+                                name: 'cose-bilkent',
+                                idealEdgeLength: 200,
+                                nodeRepulsion: 8000,
+                                edgeElasticity: 0.3,
+                                nestingFactor: 0.05,
+                                gravity: 0.15,
+                                numIter: 3000,
+                                tile: true,
+                                animate: true,
+                                refresh: 30,
+                                fit: true,
+                                padding: 80,
+                                componentSpacing: 200
+                            };
+                        }
+                        
+                        if (optimizedLayout) {
+                            cy.layout(optimizedLayout).run();
+                        }
+                    }, 1000);
+                    
+                    // add double click reset layout functionality
+                    cy.on('dblclick', function(evt) {
+                        if (evt.target === cy) {
+                            // double click blank area to reset layout
+                            const nodeCount = cy.nodes().length;
+                            let resetLayout;
+                            
+                            if (nodeCount <= 10) {
+                                resetLayout = {
+                                    name: 'cose-bilkent',
+                                    idealEdgeLength: 120,
+                                    nodeRepulsion: 4000,
+                                    edgeElasticity: 0.5,
+                                    nestingFactor: 0.15,
+                                    gravity: 0.3,
+                                    numIter: 2000,
+                                    tile: false,
+                                    animate: true,
+                                    refresh: 20,
+                                    fit: true,
+                                    padding: 40,
+                                    componentSpacing: 120
+                                };
+                            } else if (nodeCount <= 30) {
+                                resetLayout = {
+                                    name: 'cose-bilkent',
+                                    idealEdgeLength: 150,
+                                    nodeRepulsion: 6000,
+                                    edgeElasticity: 0.45,
+                                    nestingFactor: 0.1,
+                                    gravity: 0.25,
+                                    numIter: 2500,
+                                    tile: true,
+                                    animate: true,
+                                    refresh: 20,
+                                    fit: true,
+                                    padding: 50,
+                                    componentSpacing: 150
+                                };
+                            } else {
+                                resetLayout = {
+                                    name: 'cose-bilkent',
+                                    idealEdgeLength: 200,
+                                    nodeRepulsion: 8000,
+                                    edgeElasticity: 0.3,
+                                    nestingFactor: 0.05,
+                                    gravity: 0.15,
+                                    numIter: 3000,
+                                    tile: true,
+                                    animate: true,
+                                    refresh: 30,
+                                    fit: true,
+                                    padding: 80,
+                                    componentSpacing: 200
+                                };
+                            }
+                            
+                            cy.layout(resetLayout).run();
+                        }
+                    });
+                });
+
+                cy.on('tap', 'node', function(evt){
+                    cy.nodes().unselect();
+                    evt.target.select();
+                });
+            } catch (error) {
+                alert('Error initializing graph: ' + error.message);
+                console.error('Error:', error);
+            }
+        }
+
+        // wait for the graph.json to be loaded
+        window.onload = function() {
+            alert('window.onload called');
+            if (window.Android) {
+                alert('Android interface found, calling onGraphReady');
+                window.Android.onGraphReady();
+            } else {
+                alert('Android interface not found!');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const addNodeBtn = document.getElementById('addNodeBtn');
+            const uploadGraphBtn = document.getElementById('uploadGraphBtn');
+            const addNodeModal = document.getElementById('addNodeModal');
+            const newNodeNameInput = document.getElementById('newNodeNameInput');
+            const relationTypeInput = document.getElementById('relationTypeInput');
+            const confirmAddNodeBtn = document.getElementById('confirmAddNodeBtn');
+            const cancelAddNodeBtn = document.getElementById('cancelAddNodeBtn');
+
+            let sourceNodeForModal = null;
+
+            // add upload graph button functionality
+            uploadGraphBtn.addEventListener('click', function() {
+                if (window.Android && typeof window.Android.uploadGraphFile === 'function') {
+                    window.Android.uploadGraphFile();
+                } else {
+                    alert('Upload functionality not available');
+                }
+            });
+
+            optimizeLayoutBtn.addEventListener('click', function() {
+                if (cy) {
+                    cy.layout({
+                        name: 'cose-bilkent',
+                        idealEdgeLength: 150,
+                        nodeRepulsion: 6000,
+                        edgeElasticity: 0.45,
+                        nestingFactor: 0.1,
+                        gravity: 0.25,
+                        numIter: 2500,
+                        tile: true,
+                        animate: true,
+                        refresh: 20,
+                        fit: true,
+                        padding: 50,
+                        componentSpacing: 150
+                    }).run();
+                }
+            });
+
+            addNodeBtn.addEventListener('click', function() {
+                if (!cy) {
+                    alert('Graph is not initialized yet!');
+                    return;
+                }
+                let selectedNodes = cy.$('node:selected');
+                if (selectedNodes.length === 0) {
+                    alert('Please tap on an existing node in the graph first. The new entity will be connected to this selected node.');
+                    return;
+                }
+                sourceNodeForModal = selectedNodes[0];
+                newNodeNameInput.value = '';
+                relationTypeInput.value = '';
+                addNodeModal.style.display = 'block';
+                newNodeNameInput.focus();
+            });
+
+            confirmAddNodeBtn.addEventListener('click', function() {
+                if (!sourceNodeForModal) {
+                    alert('Error: Source node for connection is not defined. Please select a node first.');
+                    addNodeModal.style.display = 'none';
+                    return;
+                }
+                let nodeName = newNodeNameInput.value.trim();
+                let relationType = relationTypeInput.value.trim();
+                if (!nodeName) {
+                    alert('Please enter a name for the new entity.');
+                    newNodeNameInput.focus();
+                    return;
+                }
+                if (!relationType) {
+                    alert('Please enter a relation type for the connection.');
+                    relationTypeInput.focus();
+                    return;
+                }
+                // generate unique IDs
+                let newNumericIdNodes = cy.nodes().length;
+                let newNumericIdEdges = cy.edges().length;
+                let newId, edgeId;
+                do { newNumericIdNodes++; newId = 'n' + newNumericIdNodes; } while (cy.getElementById(newId).length > 0);
+                do { newNumericIdEdges++; edgeId = 'e' + newNumericIdEdges; } while (cy.getElementById(edgeId).length > 0);
+
+                cy.add([
+                    { group: 'nodes', data: { id: newId, name: nodeName, size: 40 } },
+                    { group: 'edges', data: { id: edgeId, source: sourceNodeForModal.id(), target: newId, label: relationType } }
+                ]);
+                cy.layout({
+                    name: 'cose',
+                    animate: true,
+                    animationDuration: 500,
+                    fit: true,
+                    padding: 30
+                }).run();
+                if (window.Android && typeof window.Android.onNodeAdded === 'function') {
+                    window.Android.onNodeAdded(newId, nodeName, sourceNodeForModal.id(), relationType);
+                }
+                addNodeModal.style.display = 'none';
+                sourceNodeForModal = null;
+            });
+
+            cancelAddNodeBtn.addEventListener('click', function() {
+                addNodeModal.style.display = 'none';
+                sourceNodeForModal = null;
+            });
+        });
+    </script>
+    <defs>
+        <filter id="nodeShadow" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#315AE3" flood-opacity="0.3"/>
+        </filter>
+        <marker id="arrow" markerWidth="16" markerHeight="16" refX="14" refY="8"
+                orient="auto" markerUnits="strokeWidth">
+            <path d="M2,2 L14,8 L2,14 Z" fill="#315AE3"/>
+        </marker>
+    </defs>
+</body>
+</html> 

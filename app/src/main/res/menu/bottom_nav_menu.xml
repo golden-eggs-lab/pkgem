@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/nav_my_kg"
+        android:icon="@android:drawable/ic_menu_compass"
+        android:title="My KG" />
+    <item
+        android:id="@+id/nav_device_nearby"
+        android:icon="@android:drawable/ic_menu_search"
+        android:title="Nearby" />
+    <item
+        android:id="@+id/nav_result_panel"
+        android:icon="@android:drawable/ic_menu_view"
+        android:title="Results" />
+</menu>

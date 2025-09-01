@@ -1,0 +1,35 @@
+{
+  "nodes": [
+    { "id": "n1", "labels": ["Amy"] },
+    { "id": "n2", "labels": ["65"] },
+    { "id": "n3", "labels": ["1957"] },
+    { "id": "n4", "labels": ["8"] },
+    { "id": "n5", "labels": ["15"] },
+    { "id": "n6", "labels": ["Comilla"] },
+    { "id": "n7", "labels": ["Bangladesh"] },
+    { "id": "n8", "labels": ["1"] },
+    { "id": "n9", "labels": ["Sophia"] },
+    { "id": "n10", "labels": ["Quinn"] },
+    { "id": "n55", "labels": ["extroverted"] },
+    { "id": "n56", "labels": ["Bob"] },
+    { "id": "n57", "labels": ["39"] },
+    { "id": "n58", "labels": ["1983"] },
+    { "id": "n59", "labels": ["1"] }
+  ],
+  "edges": [
+    { "id": "e1", "source": "n1", "target": "n2", "labels": ["age_years"] },
+    { "id": "e2", "source": "n1", "target": "n3", "labels": ["birth_year"] },
+    { "id": "e3", "source": "n1", "target": "n4", "labels": ["birth_month"] },
+    { "id": "e4", "source": "n1", "target": "n5", "labels": ["birth_day"] },
+    { "id": "e5", "source": "n1", "target": "n6", "labels": ["birth_city"] },
+    { "id": "e6", "source": "n1", "target": "n7", "labels": ["birth_country"] },
+    { "id": "e7", "source": "n1", "target": "n8", "labels": ["num_sibling"] },
+    { "id": "e8", "source": "n1", "target": "n9", "labels": ["sibling_names"] },
+    { "id": "e9", "source": "n1", "target": "n10", "labels": ["biological_mom_name"] },
+    { "id": "e54", "source": "n1", "target": "n55", "labels": ["personality"] },
+    { "id": "e55", "source": "n1", "target": "n56", "labels": ["friends with"] },
+    { "id": "e56", "source": "n56", "target": "n57", "labels": ["age_years"] },
+    { "id": "e57", "source": "n56", "target": "n58", "labels": ["birth_year"] },
+    { "id": "e58", "source": "n56", "target": "n59", "labels": ["birth_month"] }
+  ]
+}
